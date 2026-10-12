@@ -1,0 +1,28 @@
+title = "Zenek synthetic redaction fixtures"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "One explicit non-credential in the synthetic GTK scene"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^scripts/synthetic-vision-scene\.py$''']
+regexTarget = "secret"
+regexes = ['''^SYNTHETIC_SECRET_123456$''']
+
+[[allowlists]]
+description = "One explicit non-credential used to verify text rejection"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/test_provider\.py$''']
+regexTarget = "secret"
+regexes = ['''^SYNTHETIC0123456789ABCDEF$''', '''^sk-SYNTHETIC0123456789ABCDEF$''']
+
+[[allowlists]]
+description = "Literal fake OpenSSH header with no key data"
+targetRules = ["private-key"]
+condition = "AND"
+paths = ['''^tests/test_redaction\.py$''']
+regexTarget = "match"
+regexes = ['''^-----BEGIN OPENSSH PRIVATE KEY-----',30,80,300,20\),row\('SYNTHETIC_KEY_PAYLOAD',30,150,250,20\)\]\n    if closed:rows\.append\(row\('-----END OPENSSH PRIVATE KEY-----$''']

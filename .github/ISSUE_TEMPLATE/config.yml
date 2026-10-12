@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/piotr-adamski/zenek-desktop/security/advisories/new
+    about: Do not disclose vulnerabilities, tokens or private screen content in public issues.
+  - name: Installation and troubleshooting
+    url: https://github.com/piotr-adamski/zenek-desktop/blob/main/docs/installation.md
+    about: Supported desktop, dependencies, setup and common problems.

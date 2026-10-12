@@ -1,0 +1,9 @@
+include LICENSE NOTICE THIRD_PARTY_NOTICES.md README.md CHANGELOG.md CONTRIBUTING.md CODE_OF_CONDUCT.md DCO.md SECURITY.md
+graft docs
+graft gnome-extension
+graft scripts
+graft tests
+include evidence/README.md
+global-exclude __pycache__ *.py[cod]
+exclude gnome-extension/zenek@brillnet/companion-*.js
+exclude gnome-extension/zenek@brillnet/build.json

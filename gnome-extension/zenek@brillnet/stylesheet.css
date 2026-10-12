@@ -1,0 +1,7 @@
+.zenek-dialog { background-color: #192636; color: #f1f0df; border: 2px solid #69cbb8; border-radius: 16px; padding: 14px; spacing: 10px; width: 370px; }
+.zenek-text { font-size: 14px; }
+.zenek-input-scroll { background-color: #293c50; border-radius: 8px; padding: 9px; }
+.zenek-entry { background-color: transparent; color: #ffffff; border: 0; box-shadow: none; padding: 0; }
+.zenek-button { padding: 6px 10px; background-color: #34556a; border-radius: 7px; }
+.zenek-button:hover { background-color: #427c82; }
+.zenek-tooltip { background-color: #192636; color: #f1f0df; border: 1px solid #69cbb8; border-radius: 8px; padding: 8px 12px; font-size: 13px; width: 230px; }

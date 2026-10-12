@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+evidence/*.png
+evidence/siwc-*.md
+gnome-extension/zenek@brillnet/companion-*.js
+gnome-extension/zenek@brillnet/build.json
+evidence/*.zip
+evidence/gnome-smoke.log
+# Runtime evidence can contain private conversations and machine identifiers.
+evidence/*
+!evidence/README.md
+dist/
+build/
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*

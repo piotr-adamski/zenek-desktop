@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zenek-desktop"
+version = "0.1.0"
+description = "A local GNOME desktop companion with encrypted memory and a simulated personality"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]
+authors = [{name = "Piotr Adamski"}]
+requires-python = ">=3.12"
+dependencies = ["sqlcipher3-binary==0.6.0", "secretstorage>=3.3", "httpx>=0.28", "PyJWT[crypto]>=2.10", "Pillow>=11"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Gnome",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Desktop Environment :: Gnome",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "build>=1.2,<2"]
+
+[project.urls]
+Homepage = "https://github.com/piotr-adamski/zenek-desktop"
+Documentation = "https://github.com/piotr-adamski/zenek-desktop/tree/main/docs"
+Repository = "https://github.com/piotr-adamski/zenek-desktop.git"
+Issues = "https://github.com/piotr-adamski/zenek-desktop/issues"
+
+[project.scripts]
+zenek = "zenek_core.cli:main"
+zenek-core = "zenek_core.main:main"
+zenek-settings = "zenek_settings.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

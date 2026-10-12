@@ -1,0 +1,139 @@
+{
+  "native_size": [
+    32,
+    32
+  ],
+  "scale": 3,
+  "anchor": [
+    16,
+    30
+  ],
+  "hitbox": [
+    4,
+    3,
+    28,
+    31
+  ],
+  "animations": {
+    "idle": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "idle-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "roaming": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "roaming-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "sleeping": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "sleeping-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "waking": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "waking-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "curious": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "curious-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "thinking": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "thinking-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "amused": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "amused-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "irritated": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "irritated-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "listening": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "listening-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "typing": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "typing-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "leaving": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "leaving-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    },
+    "returning": {
+      "frames": 4,
+      "fps": 10,
+      "loop": true,
+      "sheet": "returning-sheet.png",
+      "frame_size": [
+        96,
+        96
+      ]
+    }
+  }
+}

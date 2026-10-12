@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python and source checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install native test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 dbus
+      - name: Set up Python environment
+        run: |
+          /usr/bin/python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[dev]'
+      - name: Check source and tests
+        env:
+          PYTHONNOUSERSITE: "1"
+        run: |
+          bash -n scripts/install-user.sh scripts/deploy-user-build.sh scripts/uninstall-user.sh scripts/validate.sh
+          bash scripts/validate.sh
+      - name: Build Python distributions
+        run: .venv/bin/python -m build

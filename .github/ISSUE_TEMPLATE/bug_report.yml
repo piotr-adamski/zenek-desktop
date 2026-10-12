@@ -1,0 +1,31 @@
+name: Bug report
+description: Report reproducible behavior with synthetic data.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach tokens, real screenshots, conversations, databases or runtime evidence. Report vulnerabilities privately.
+  - type: input
+    id: version
+    attributes:
+      label: Zenek version or commit
+    validations:
+      required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Distribution, GNOME Shell and Python versions
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Use synthetic content and explain expected versus actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Reviewed diagnostics
+      description: Remove account IDs, local paths and private text before submitting.
