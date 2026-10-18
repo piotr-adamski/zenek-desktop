@@ -18,5 +18,9 @@ vulnerabilities in public issues or PRs. Do not send real access tokens,
 screenshots of sensitive accounts, archives or encrypted memory/key material.
 
 Relevant boundaries include OAuth/OIDC, Keyring and SQLCipher access, screen
-redaction, the public-web sandbox, archive import and the session D-Bus interface.
+redaction, the public-web sandbox, notebook confinement, model tool dispatch,
+autonomous character/agenda records, archive import and the session D-Bus interface.
+Character autonomy does not authorize code execution or access outside the
+notebook. Private hobbies are visible to the owner and may enter inference;
+notebook text is not encrypted at rest. See [autonomy.md](docs/autonomy.md).
 See [privacy.md](docs/privacy.md) for the current guarantees and limitations.

@@ -1,5 +1,9 @@
 # Installation
 
+These instructions describe **0.2.0 preview**. Complete source is available in
+the [GitHub release](https://github.com/piotr-adamski/zenek-desktop/releases/tag/v0.2.0),
+including a source archive and `SHA256SUMS`.
+
 ## Supported desktop
 
 Linux with GNOME Shell **50**, **Wayland**, systemd user services and an unlocked
@@ -26,7 +30,7 @@ uses system site packages for PyGObject. Python dependencies come from PyPI.
 ## Install
 
 ```bash
-git clone https://github.com/piotr-adamski/zenek-desktop.git
+git clone --branch v0.2.0 https://github.com/piotr-adamski/zenek-desktop.git
 cd zenek-desktop
 bash scripts/install-user.sh --check
 bash scripts/install-user.sh
@@ -46,19 +50,33 @@ double quotes, backslashes or percent characters.
 
 ## Update and uninstall
 
-Review the changelog, then update only the public branch:
+Review the [changelog](../CHANGELOG.md), stop Core, and check for local source
+changes before switching versions. Keep the same checkout so its private
+`notebook/` remains available. The release-tag install uses a detached checkout;
+update it explicitly rather than running `git pull` there:
 
 ```bash
 zenek stop
-git pull --ff-only origin main
+git fetch origin --tags
+git switch --detach v0.2.0
 bash scripts/install-user.sh
 zenek start
 ```
+
+For an intentional development checkout on `main`, use
+`git pull --ff-only origin main` instead of switching to a release tag.
 
 If a loaded extension needs its module refreshed, run
 `bash scripts/deploy-user-build.sh`. This reloads only Zenek's extension and,
 if running, Core. It does not restart GNOME. Existing memory, Keyring records
 and settings survive. Review local changes before pulling/updating.
+
+Version 0.2.0 uses the existing SQLCipher record store and Keyring registration.
+It retains selected models, budgets and capture/web/autostart preferences;
+autonomous character changes retain history and rollback. There is no reset or
+new login required solely for this update. Keep a private backup before changing
+versions: the database needs its existing Keyring key, and `notebook/` is a
+separate plaintext directory. A JSON memory export does not back up notebook files.
 
 ```bash
 bash scripts/uninstall-user.sh
@@ -78,6 +96,7 @@ data if wanted, reviewing or exporting first.
 | User service | `~/.config/systemd/user/zenek-core.service` |
 | Extension | `~/.local/share/gnome-shell/extensions/zenek@brillnet` |
 | Launcher | `~/.local/bin/zenek` |
+| Autonomous text notes | `notebook/` inside the installed source checkout (not encrypted) |
 
 Core data/config paths respect XDG variables; installation uses conventional
 GNOME user locations. Keys and OAuth credentials live in Keyring.
@@ -93,5 +112,10 @@ GNOME user locations. Keys and OAuth credentials live in Keyring.
   operational Portal errors require **Wznów zrzuty**.
 - Profile unavailable: test the selected profile in Settings. Access depends on
   your account. There is no automatic paid fallback.
+- No new thoughts or hobby notes: check the background profile, mode/pause state,
+  daily budget and your session's idle/lock state. Notes are created when the
+  model chooses to write; they are not generated on a fixed publishing schedule.
+- Notebook appears empty after moving/replacing the checkout: notes belong to
+  its local `notebook/`; Git clones and release archives do not carry private notes.
 - Diagnostics: `journalctl --user -u zenek-core.service`. Review private data
   before including any excerpt in a public issue.

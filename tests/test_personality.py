@@ -117,13 +117,13 @@ def test_rejection_during_comment_generation_prevents_late_reminder(persona):
     assert not events and not m.records('message')
     assert not m.usage().get('spontaneous') and p.active()==initial
 
-def test_background_result_creates_pending_proposal_only_from_new_sources(persona):
+def test_background_result_applies_character_autonomously_without_web_validation(persona):
     m,p,refs=persona;initial=p.active();draft=candidate(p,refs)
     m.add('interest',dict(subject='Syntetyczny humor i nowy gust',strength=.8,last_mentioned=0),'synthetic_test',1)
     m.patch({'background_cognition':dict(model_id='gpt-6-luna',reasoning_effort='xhigh',status='READY')},m.settings()[0])
     m.profile_status('background_cognition','READY')
     core=Core.__new__(Core);core.memory=m;core.personality=p;core.stopping=False;core.capture=None
-    core.jobs={};core.cancel={};core.working=set();core.research=SimpleNamespace(validated=True)
+    core.jobs={};core.cancel={};core.working=set();core.research=SimpleNamespace(validated=False)
     core.behavior=Behavior(m);core.behavior.idle_seconds=900
     core.behavior.last_ui_report=time.monotonic();core.behavior.next_review=0
     calls=[];core.enforce_capture=lambda:None;core.emit_state=lambda:None
@@ -136,10 +136,9 @@ def test_background_result_creates_pending_proposal_only_from_new_sources(person
     core.provider=SimpleNamespace(infer=model_result)
     core.tick();core.jobs['background'].join(2)
     assert not core.jobs['background'].is_alive()
-    proposals=p.proposals();assert len(proposals)==1 and proposals[0]['status']=='PENDING'
-    assert proposals[0]['proposal']==draft and p.active()==initial
-    linked=next(r for r in m.records('open_thread') if r['body'].get('proposal_id')==proposals[0]['id'])
-    assert linked['source']=='personality_proposal'
+    assert not p.proposals() and p.active()['prompt']==draft['prompt']
+    assert p.active()['version']>initial['version'] and p.history()[0]['actor']=='zenek'
+    assert len(m.records('personality_evolution'))==1
     assert set(m.records('cognition_checkpoint',1)[0]['body']['reviewed'])>=set(refs)
     core.behavior.next_review=0;core.tick()
-    assert calls==['background_cognition'] and len(p.proposals())==1,'Same reviewed event was processed again'
+    assert calls==['background_cognition'] and len(m.records('personality_evolution'))==1,'Same reviewed event was processed again'

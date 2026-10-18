@@ -1,5 +1,8 @@
 # Configuration
 
+Applies to **0.2.0 preview**. See [autonomy and tools](autonomy.md) for the full
+character/agenda/notebook capability reference.
+
 Open `zenek settings`. Saved preferences and operational status are shown
 separately. Current product labels and default conversation language are Polish.
 
@@ -49,6 +52,22 @@ quiet mode, idle/fullscreen behavior, bubble duration, frequency and independent
 inference/web limits. Rolling counters/cooldowns survive restarts; returning from
 inactivity does not create a backlog of missed comments.
 
+Fresh-install limits (existing users keep their saved values):
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Background calls | 20 per rolling 24 hours | Shared by periodic reflection, feedback and self-scheduled work |
+| Periodic background cooldown | 30 minutes | Spaces periodic reflections; feedback/due plans bypass this gap |
+| Conversation calls | 120 per rolling 24 hours | Includes model continuations after tools |
+| Spontaneous comments | 3 per rolling hour, 15-minute gap | Limits displayed initiatives |
+| Public searches / page reads | 15 / 30 per rolling 24 hours | Separate web usage limits |
+
+You can raise the background limit in Settings if you want more development.
+Changing a limit does not select a model or enable observation/research. Mode B
+or **pause background cognition** stops autonomous reflections and scheduled
+work. Quiet mode and initiative OFF control spontaneous speech; silent internal
+development can continue when background cognition is enabled.
+
 Import means explicitly choosing local ZIP/JSON/TXT/MD archives, reviewing the
 preview and selecting threads. No filesystem watcher or account-history scan
 is used. Corrections, scoped deletion and explicit JSON export are available;
@@ -56,17 +75,51 @@ exports may contain personal information.
 
 ## Simulated personality
 
-**Osobowość** provides the base instruction/traits and proposed instruction changes
-with diff, approve/reject, history and rollback. Personalize the default persona
-for your name and language.
+**Osobowość** shows the current instruction/traits, version history and rollback.
+Zenek can change its own character autonomously. Each applied change records its
+reason and sources, when present. Older pending proposals remain available for
+review; they do not prevent new autonomous development.
 
 **Model siebie i historia rozwoju** shows nine categories with source references,
 confidence and revision history. Four seed facets provide a creative starting
-direction. Existing background reflections supply up to three updates per reply;
-limits are 120 active facets and 16 per category. Sources are required and owner
-corrections are preserved. The model influences context, but cannot grant itself
-permissions or approve base-instruction changes. This is playful simulation;
-long-term coherence remains experimental.
+direction. Background reflections develop these facets; an empty source list
+marks an original thought rather than external evidence. Owner corrections are
+preserved. Character changes cannot grant permissions or change provider/system
+settings. This is playful simulation; long-term coherence remains experimental.
 
 Public web research is a separate OFF-by-default MediaWiki option. It does not
-log into email, social media or websites.
+log into email, social media or websites. The model chooses public topics and can
+read results and source links through the isolated broker. The broker test is a
+diagnostic action, not a prerequisite for research. Existing usage limits still
+apply, including model continuations after tool calls.
+
+The model can list, read and write its own text files under `notebook/` in the
+source checkout, including nested knowledge, journal and notes folders. These
+files are local runtime data excluded from Git. Paths outside that folder,
+symlinks, hardlinks and executable/source files are not accepted. `RequestCodeChange`
+records a request for the owner; it never edits or runs code.
+
+## Notebook, conversation and development window
+
+The tray entries **Notatnik**, **Historia rozmów**, **Rozwój Zenka**, or commands
+`zenek notebook`, `zenek chat`, `zenek development` open the same native window.
+Notebook search covers file contents. **Porozmawiajmy o tym** includes the selected
+note in the conversation context. Conversation search supports Polish case;
+older messages load in pages without dropping the saved history. Returning to a
+thread includes its original exchange. The development timeline shows reasons,
+character changes, notes, knowledge and Zenek's own topic choices. Source links
+are clickable. Operation labels follow actual worker/tool activity.
+
+Each completed reply and displayed initiative creates one durable feedback task.
+The background profile evaluates it when the conversation is idle. `PlanThought`
+can schedule discussion, reflection, research or hobby practice; `SetTopicPreference`
+chooses curiosity, a hobby, dislike or closure, independently from shared/private
+development. Private topics do not become spontaneous invitations. Disliked or
+closed topics leave autonomous selection and retire pending plans; Zenek can
+change his mind later. Internal work produces notes/records without a bubble.
+
+Feedback uses the selected background model and its existing daily budget, but
+does not wait for the periodic reflection cooldown. Every model continuation is
+counted. Mode B and pausing background cognition also pause this loop. Tasks and
+choices persist in the existing encrypted application memory across restarts.
+The final reflection is an explicit creative note, not hidden model reasoning.

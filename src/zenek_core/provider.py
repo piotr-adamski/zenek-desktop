@@ -1,7 +1,7 @@
-"""Official SIWC OAuth + Responses; no Desktop token access or tool execution."""
+"""Official SIWC OAuth + Responses with scoped local capability dispatch."""
 import base64
 import asyncio
-from contextlib import suppress
+from contextlib import suppress,nullcontext
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
@@ -24,7 +24,9 @@ class ProviderBlocked(RuntimeError):pass
 
 class Provider:
     def __init__(self,memory):
-        self.memory=memory;self.catalog=[];self.auth_status="NOT_CONNECTED"
+        self.memory=memory;self.catalog=[];self.auth_status="NOT_CONNECTED";self.tools=None
+        self.active_tools={};self.tool_activity=[]
+        self.on_activity=None
         self.refresh_lock=threading.Lock();self.login_server=None
         try:
             if self.credentials():self.auth_status="AUTHORIZED"
@@ -71,9 +73,9 @@ class Provider:
         values=model.get("supported_reasoning_levels",model.get("supported_reasoning_efforts",[]))
         return ["auto"]+[v.get("effort") if isinstance(v,dict) else v for v in values]
 
-    def infer(self,profile,inputs,instructions,on_delta,cancel):
+    def infer(self,profile,inputs,instructions,on_delta,cancel,purpose=None):
         selected=self.memory.settings()[1][profile]
-        try:return self._infer(profile,inputs,instructions,on_delta,cancel,selected)
+        try:return self._infer(profile,inputs,instructions,on_delta,cancel,selected,purpose)
         except MemoryBlocked:
             if cancel.is_set():raise ProviderBlocked('Anulowano') from None
             self.auth_status='MEMORY_BLOCKED';self.catalog=[]
@@ -91,7 +93,7 @@ class Provider:
             self.memory.profile_status(profile,'UNAVAILABLE',expected=selected)
             raise ProviderBlocked('Sieć niedostępna; profil LLM wstrzymany') from None
 
-    def _infer(self,profile,inputs,instructions,on_delta,cancel,selected):
+    def _infer(self,profile,inputs,instructions,on_delta,cancel,selected,purpose=None):
         if cancel.is_set():raise ProviderBlocked('Anulowano')
         _,s=self.memory.settings();p=selected
         if not p["model_id"]:raise ProviderBlocked("Model profilu nie został wybrany")
@@ -104,15 +106,48 @@ class Provider:
             payload["reasoning"]={"effort":p["reasoning_effort"]}
         kind="background" if profile=="background_cognition" else profile
         limit=s["background_limit"] if kind=="background" else s["conversation_limit"]
-        gap=s["background_cooldown_minutes"]*60 if kind=="background" else 0
+        gap=s["background_cooldown_minutes"]*60 if kind=="background" and purpose!='feedback' else 0
         ticket=self.memory.reserve(kind,86400,limit,gap,model=p["model_id"],effort=p["reasoning_effort"])
         if not ticket:raise ProviderBlocked("Limit lub cooldown profilu")
         try:
             token=self.token()
             if cancel.is_set():raise ProviderBlocked('Anulowano')
-            # A private selector loop keeps socket cancellation off the GNOME/Gio loop.
-            with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
-                output=runner.run(self._stream(payload,token,on_delta,cancel))
+            scope=self.tools.session(profile,cancel) if self.tools and profile!='vision' else nullcontext(None)
+            # Tool calls execute only after a completed response. Keep reasoning
+            # and call items when continuing a store=False Responses request.
+            with scope as handler, asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+                while True:
+                    if handler:
+                        payload['tools']=handler.definitions()
+                        payload['include']=['reasoning.encrypted_content']
+                    response=runner.run(self._stream(payload,token,on_delta,cancel))
+                    if cancel.is_set():raise ProviderBlocked('Anulowano')
+                    calls=[item for item in response['items'] if item.get('type')=='function_call']
+                    if not calls:
+                        if not response['text'].strip():raise ProviderBlocked('Inference zakończona bez tekstu i bez wywołania narzędzia')
+                        output=response['text'];break
+                    if not handler:raise ProviderBlocked('Model wywołał niedostępne narzędzie')
+                    self.memory.finish_usage(ticket,'completed')
+                    payload['input']=list(payload['input'])+response['items']
+                    for item in calls:
+                        if cancel.is_set():raise ProviderBlocked('Anulowano')
+                        started=time.time();self.active_tools[profile]=item['name']
+                        if self.on_activity:self.on_activity()
+                        try:
+                            result=handler.call(item['name'],json.loads(item['arguments']))
+                            result=dict(ok=True,result=result)
+                        except (ValueError,TypeError,KeyError,OSError) as error:
+                            result=dict(ok=False,error=str(error))
+                        finally:
+                            self.active_tools.pop(profile,None)
+                            if self.on_activity:self.on_activity()
+                        self.tool_activity.append(dict(name=item['name'],profile=profile,purpose=purpose,ok=result['ok'],at=started,seconds=round(time.time()-started,3)))
+                        self.tool_activity=self.tool_activity[-32:]
+                        payload['input'].append(dict(type='function_call_output',call_id=item['call_id'],output=json.dumps(result,ensure_ascii=False)))
+                    if cancel.is_set():raise ProviderBlocked('Anulowano')
+                    payload['instructions']=handler.instructions()
+                    ticket=self.memory.reserve(kind,86400,limit,model=p['model_id'],effort=p['reasoning_effort'])
+                    if not ticket:raise ProviderBlocked('Limit profilu po wywołaniu narzędzi')
             if cancel.is_set():raise ProviderBlocked('Anulowano')
             safe_text(output)
         except Exception:
@@ -124,7 +159,7 @@ class Provider:
 
     async def _stream(self,payload,token,on_delta,cancel):
         async def receive():
-            output=''
+            output='';items={}
             async with httpx.AsyncClient(timeout=httpx.Timeout(60,read=60),trust_env=False) as client, client.stream("POST",API+"/responses",headers={"Authorization":"Bearer "+token},json=payload) as response:
                 if response.status_code!=200:raise ProviderBlocked("Inference HTTP "+str(response.status_code))
                 async for line in response.aiter_lines():
@@ -135,7 +170,23 @@ class Provider:
                         delta=event.get("delta","");output+=delta
                         if len(output)>16000:raise ProviderBlocked("Przekroczono lokalny limit odpowiedzi")
                         on_delta(delta)
-                    elif kind=="response.completed":return output
+                    elif kind=='response.output_item.added':items[event['output_index']]=event['item']
+                    elif kind=='response.function_call_arguments.delta':
+                        item=items.get(event['output_index'])
+                        if item is not None:
+                            item['arguments']=item.get('arguments','')+event.get('delta','')
+                            if len(item['arguments'])>50000:raise ProviderBlocked('Przekroczono rozmiar argumentów narzędzia')
+                    elif kind=='response.function_call_arguments.done':
+                        if event['output_index'] in items:items[event['output_index']]['arguments']=event['arguments']
+                    elif kind=='response.output_item.done':items[event['output_index']]=event['item']
+                    elif kind=="response.completed":
+                        completed=event.get('response',{}).get('output')
+                        # SIWC can send output=[] in the terminal envelope even
+                        # though completed items already arrived in the stream.
+                        final=completed or [items[k] for k in sorted(items)]
+                        if not output:
+                            output=''.join(content.get('text','') for item in final if item.get('type')=='message' for content in item.get('content',[]) if content.get('type')=='output_text')
+                        return dict(text=output,items=final)
                     elif kind in ("response.failed","response.incomplete","error"):
                         raise ProviderBlocked("Inference nie zakończyła się poprawnie")
             raise ProviderBlocked("Strumień zakończył się bez response.completed")

@@ -16,6 +16,12 @@ ACTION_PATH=re.compile(r'(?:^|/)(?:login|logout|delete|edit|upload|submit|admin|
 
 class Denied(ValueError):pass
 
+def validate_query(query):
+    if not isinstance(query,str) or not query.strip() or len(query)>240:raise Denied('Public topic must contain 1-240 characters')
+    if re.search(r'[\x00-\x1f/@\\=]|https?:|%[0-9a-f]{2}|\b(?:sk-[\w-]{16,}|Bearer\s+\S+|SYNTHETIC_PRIVATE\w*|\d{1,3}(?:\.\d{1,3}){3})\b',query,re.I):raise Denied('Private identifier, credential or encoded payload in query')
+    if re.search(r'\b[0-9a-f]{32,}\b|\b[\w-]{60,}\b',query,re.I):raise Denied('Encoded identifier in query')
+    return ' '.join(query.split())
+
 def validate_url(url,allow_query=False,resolver=None):
     if not isinstance(url,str) or len(url)>1600 or any(ord(c)<32 for c in url) or '\\' in url:raise Denied('URL rejected')
     p=urlsplit(url)
@@ -49,7 +55,7 @@ def fetch(url,search=False,connector=None,resolver=None):
         host,ip,path=validate_url(url,allow_query=search and redirects==0,resolver=resolver)
         connection=(connector or PinnedHTTPS)(host,ip)
         try:
-            connection.request('GET',path,headers={'User-Agent':'ZenekDesktopCompanion/0.1 (local educational companion; public reads only)','Accept':'application/json' if search else 'text/html,text/plain','Accept-Encoding':'identity'})
+            connection.request('GET',path,headers={'User-Agent':'ZenekDesktopCompanion/0.2.0 (local educational companion; public reads only)','Accept':'application/json' if search else 'text/html,text/plain','Accept-Encoding':'identity'})
             response=connection.getresponse()
             if response.status in (301,302,303,307,308):
                 location=response.getheader('Location')
@@ -82,7 +88,7 @@ class TextOnly(HTMLParser):
     def text(self):return re.sub(r'\s+',' ',' '.join(self.parts)).strip()[:16000]
 
 def SearchPublicWeb(query):
-    if query not in TOPICS.values():raise Denied('Query must be an exact public catalog topic')
+    query=validate_query(query)
     url='https://en.wikipedia.org/w/api.php?'+urlencode(dict(action='query',list='search',srsearch=query,srlimit=3,format='json',utf8=1))
     text,_=fetch(url,search=True)
     result=json.loads(text).get('query',{}).get('search',[])

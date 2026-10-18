@@ -68,7 +68,7 @@ export default class ZenekCompanion extends Extension {
         this._captureResume=new PopupMenu.PopupMenuItem('Wznów zrzuty');
         this._captureResume.connect('activate',()=>this._call('ResumeScreenCapture'));
         this._indicator.menu.addMenuItem(this._captureResume);this._captureResume.hide();
-        for(const [label,method] of [['Rozmowa','dialog'],['Pokaż Zenka','ShowCompanion'],['Schowaj Zenka','HideCompanion'],['Przestań mówić','quiet'],['Przestań patrzeć','PauseScreenCapture'],['Ustawienia','settings'],['Zatrzymaj Zenka','stop']]){
+        for(const [label,method] of [['Rozmowa','dialog'],['Historia rozmów','chat'],['Notatnik','notebook'],['Rozwój Zenka','development'],['Pokaż Zenka','ShowCompanion'],['Schowaj Zenka','HideCompanion'],['Przestań mówić','quiet'],['Przestań patrzeć','PauseScreenCapture'],['Ustawienia','settings'],['Zatrzymaj Zenka','stop']]){
             const item=new PopupMenu.PopupMenuItem(label);this._indicator.menu.addMenuItem(item);
             item.connect('activate',()=>this._action(method));
         }
@@ -152,6 +152,7 @@ export default class ZenekCompanion extends Extension {
     _apply(s){
         const previous=this._state;
         this._state=s;this._indicator.show();
+        this._operation?.set_text(s.activity_status?.label??'Jestem');
         this._sprite.accessible_name='Zenek — '+(s.animation?.reason??'otwórz rozmowę');
         if(this._tooltip)this._tooltip.set_text(this._tooltipText());
         this._icon.icon_size=48*Math.max(1,Math.min(6,s.settings?.sprite_scale??3));
@@ -254,6 +255,8 @@ export default class ZenekCompanion extends Extension {
     }
     _createComposer(focus){
         this._composer=true;this._engaged=false;this._reply='';this._sentText='';
+        this._operation=new St.Label({text:this._state?.activity_status?.label??'Jestem',style_class:'zenek-operation'});
+        this._dialog.add_child(this._operation);
         this._entry=new St.Entry({hint_text:'Napisz do Zenka…',style_class:'zenek-entry',reactive:true,can_focus:true,x_expand:true});
         this._entry.clutter_text.single_line_mode=false;
         this._entry.clutter_text.line_wrap=true;
@@ -267,7 +270,7 @@ export default class ZenekCompanion extends Extension {
         inputContent.add_child(this._entry);this._inputScroll.set_child(inputContent);
         this._dialog.add_child(this._inputScroll);
         const actions=new St.BoxLayout({style_class:'zenek-actions'});
-        for(const [label,fn] of [['Wyślij',()=>this._send()],['Anuluj',()=>this._cancelResponse()],['Zamknij',()=>this._closeDialog()]]){
+        for(const [label,fn] of [['Wyślij',()=>this._send()],['Anuluj',()=>this._cancelResponse()],['Większe okno',()=>this._action('chat')],['Zamknij',()=>this._closeDialog()]]){
             const button=new St.Button({label,style_class:'zenek-button',can_focus:true});button.connect('clicked',fn);actions.add_child(button);
         }this._dialog.add_child(actions);
         const navigate=event=>{
@@ -377,12 +380,15 @@ export default class ZenekCompanion extends Extension {
         if(this._outsidePointer){GLib.source_remove(this._outsidePointer);this._sources.delete(this._outsidePointer);this._outsidePointer=null;}
         if(this._inputLayoutSource){GLib.source_remove(this._inputLayoutSource);this._sources.delete(this._inputLayoutSource);this._inputLayoutSource=null;}
         this._dialogWindow=null;
-        this._inputScroll=null;
+        this._inputScroll=null;this._operation=null;
         if(this._engaged&&!this._disabled)this._call('UserInteraction',{active:false});this._dialog?.destroy();this._dialog=null;this._entry=null;this._text=null;this._scroll=null;this._sentText='';this._composer=false;this._engaged=false;
     }
     _action(method){
         if(method==='dialog')this._openDialog();
-        else if(method==='settings')Gio.Subprocess.new([GLib.get_home_dir()+'/.local/bin/zenek','settings'],Gio.SubprocessFlags.NONE);
+        else if(['settings','notebook','chat','development'].includes(method)){
+            if(method!=='settings')this._closeDialog();
+            Gio.Subprocess.new([GLib.get_home_dir()+'/.local/bin/zenek',method],Gio.SubprocessFlags.NONE);
+        }
         else if(method==='stop')Gio.Subprocess.new(['systemctl','--user','stop','zenek-core.service'],Gio.SubprocessFlags.NONE);
         else if(method==='quiet')this._call('UpdateSettings',{expected_version:this._state.config_version,patch:{quiet:true}});
         else this._call(method);

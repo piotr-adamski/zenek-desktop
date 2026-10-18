@@ -7,7 +7,7 @@ def test_private_values_are_rejected_before_child_or_budget(tmp_path,monkeypatch
     m=Memory(tmp_path/'db','ab'*32);r=Research(m)
     def forbidden(*args):raise AssertionError('Private value reached worker')
     monkeypatch.setattr(r,'exchange',forbidden)
-    for method,value in [('POST','synthetic'),('SearchPublicWeb','private message'),('ReadPublicPage','https://example.org/PRIVATE')]:
+    for method,value in [('POST','synthetic'),('SearchPublicWeb','person@example.org'),('ReadPublicPage','https://example.org/PRIVATE')]:
         with pytest.raises(ValueError):r.broker(method,value,threading.Event())
     assert not m.usage();m.close()
 

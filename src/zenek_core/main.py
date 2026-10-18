@@ -22,6 +22,10 @@ from .personality import Personality
 from .importer import Importer
 from .mind import Mind,GUIDANCE
 from .narrative import Variety,ANGLES,VOICE
+from .cognition import CognitionTools,instructions
+from .notebook import Notebook
+from .agency import Agency
+from .workspace import Workspace
 
 class Core:
     def __init__(self):
@@ -38,6 +42,8 @@ class Core:
         try:
             self.memory=Memory();Mind(self.memory).bootstrap();self.behavior=Behavior(self.memory);self.provider=Provider(self.memory)
             self.research=Research(self.memory);self.personality=Personality(self.memory)
+            self.provider.tools=CognitionTools(self.memory,self.workspace_changed)
+            self.provider.on_activity=self.emit_state
             self.importer=Importer(self.memory)
             self.capture=Capture(self.frame,self.capture_changed,self.capture_permitted,lambda:self.memory.settings()[1]['screen_snapshot_seconds'])
         except Exception as e:self.error=str(e) if isinstance(e,MemoryBlocked) else "Pamięć niedostępna: "+type(e).__name__
@@ -51,16 +57,29 @@ class Core:
         version,s=self.memory.settings();b=self.behavior
         return dict(version=VERSION,release_stage=RELEASE_STAGE,core_build=self.core_build,running=True,visibility="VISIBLE" if b.visible(s) else "HIDDEN",
             manual_visible=b.manual_visible,fullscreen=b.fullscreen,memory="SQLCipher + GNOME Keyring",auth=self.provider.auth_status,
-            config_version=version,settings=s,activity=b.activity,animation=self.animation(),ui_layout=self.ui_layout,active_jobs=sorted(self.working),mood=b.mood,quiet=s["quiet"],idle=b.absent(s),locked=b.locked,suspended=b.suspended,ui_attached=time.monotonic()-b.last_ui_report<15,
+            config_version=version,settings=s,activity=b.activity,activity_status=self.activity_status(),animation=self.animation(),ui_layout=self.ui_layout,active_jobs=sorted(self.working),mood=b.mood,quiet=s["quiet"],idle=b.absent(s),locked=b.locked,suspended=b.suspended,ui_attached=time.monotonic()-b.last_ui_report<15,
             screen=self.capture.state if self.capture else "BLOCKED",capture_error=self.capture.last_error if self.capture else '',capture_frames=self.capture.frames if self.capture else 0,capture_geometry={k:v for k,v in self.capture.stream.items() if k in ('position','size','source_type')} if self.capture else {},rejected_frames=self.redactor.rejected,redaction_reason=self.redactor.last_reason,last_vision_request=self.last_vision_request,
             capture_phase=getattr(self.capture,'phase','OFF'),capture_next_snapshot=getattr(self.capture,'next_snapshot_at',0),capture_last_snapshot=getattr(self.capture,'last_snapshot_at',0),screen_analysis=self.last_screen_analysis,
             capture_pipeline_state=getattr(self.capture,'pipeline_state','NULL'),
             capture_pause_reason=self.capture_pause_reason,
             capture_portal_session=bool(self.capture and self.capture.session),capture_closed_sessions=getattr(self.capture,'closed_sessions',0),
-            web=self.research.status if s['web_enabled'] else 'OFF',web_validated=self.research.validated,evolution='AVAILABLE',personality_version=self.personality.active()['version'],pending_proposals=sum(p['status']=='PENDING' for p in self.personality.proposals()),
+            web=('READING' if set(self.provider.active_tools.values())&{'SearchPublicWeb','ReadPublicPage'} else 'READY' if self.research.status=='OFF' else self.research.status) if s['web_enabled'] else 'OFF',web_validated=self.research.validated,evolution='AUTONOMOUS',personality_version=self.personality.active()['version'],pending_proposals=sum(p['status']=='PENDING' for p in self.personality.proposals()),active_tools=dict(self.provider.active_tools),tool_activity=list(self.provider.tool_activity),
             import_status=self.importer.latest()['status'],usage=self.memory.usage(),budgets={k:self.memory.budget(k,window,s[limit],s[gap]*60 if gap else 0) for k,window,limit,gap in [('spontaneous',3600,'spontaneous_limit','spontaneous_cooldown_minutes'),('background',86400,'background_limit','background_cooldown_minutes'),('web_search',86400,'web_search_limit',None),('web_read',86400,'web_read_limit',None)]},lastError=self.last_model_error)
 
     def emit_state(self):self.ipc.emit("StateChanged",self.status())
+
+    def workspace_changed(self,kind='memory'):
+        self.ipc.emit('WorkspaceChanged',dict(kind=kind))
+
+    def activity_status(self):
+        names={'RecallMemory':'Przypominam sobie wcześniejsze wątki','SearchPublicWeb':'Szukam publicznych źródeł','ReadPublicPage':'Czytam źródło','RememberKnowledge':'Zapisuję poznaną wiedzę','WriteNote':'Piszę w notatniku','ReadNote':'Czytam własne zapiski','ListNotes':'Przeglądam notatnik','EvolvePersonality':'Rozwijam swój charakter','UpdateInterest':'Rozwijam zainteresowanie','SetTopicPreference':'Decyduję, co mnie interesuje','PlanThought':'Układam własne plany','RequestCodeChange':'Zapisuję prośbę o zmianę kodu'}
+        active=getattr(self.provider,'active_tools',{})
+        if active:
+            profile='conversation' if 'conversation' in active else next(iter(active))
+            return dict(label=names.get(active[profile],'Pracuję nad swoim wątkiem'),busy=True,tool=active[profile],profile=profile)
+        for name,label in [('conversation','Układam odpowiedź'),('feedback','Zastanawiam się nad własną wypowiedzią'),('background','Rozwijam własny wątek'),('research','Czytam publiczne źródła'),('vision','Przyglądam się dozwolonemu obrazowi'),('initiative','Układam własną myśl')]:
+            if name in self.working:return dict(label=label,busy=True,job=name)
+        return dict(label='Jestem' if not self.behavior.suspended else 'Śpię',busy=False)
 
     def capture_changed(self):
         if self.capture and self.capture.state=='OFF':
@@ -82,7 +101,7 @@ class Core:
         if 'vision' in self.working:return dict(state='blinking',reason='Czyta zamaskowany obraz')
         if self.capture and self.capture.state=='ACTIVE' and getattr(self.capture,'phase','WAITING')=='SNAPSHOT':return dict(state='blinking',reason='Pobiera pojedynczy zrzut ekranu')
         if 'research' in self.working:return dict(state='blinking',reason='Czyta publiczne źródła WWW')
-        if self.working & {'conversation','initiative','background','test'}:return dict(state='running',reason='Myśli i układa wypowiedź')
+        if self.working & {'conversation','initiative','background','feedback','test'}:return dict(state='running',reason=self.activity_status()['label'])
         if now-self.failure_at<6:return dict(state='failed',reason='Połączenie lub operacja nie powiodły się')
         if now<self.positive_until:return dict(state='jumping',reason='Reaguje na twoją pozytywną wiadomość')
         if self.behavior.composing:return dict(state='waiting',reason='Słucha ciebie')
@@ -120,6 +139,10 @@ class Core:
             if method=='UIState':self.offline_locked=p.get('locked',True) is not False;self.offline_fullscreen=p.get('fullscreen',True) is not False;self.emit_state();return True
             raise RuntimeError(self.error)
         b=self.behavior
+        if method=='ListNotebook':return Workspace(self.memory).notes(p.get('query',''))
+        if method=='ReadNotebook':return Workspace(self.memory).note(p['path'])
+        if method=='GetConversation':return Workspace(self.memory).conversation(p.get('query',''),p.get('before'),p.get('limit',40))
+        if method=='GetDevelopment':return Workspace(self.memory).development(p.get('before'),p.get('limit',40))
         if method=="UIState":
             if not {"idle_ms","locked","fullscreen"}<=set(p) or set(p)-{"idle_ms","locked","fullscreen","windows","capture_indicator","composing","ui_layout"}:raise ValueError("Nieprawidłowy stan sesji")
             if type(p["idle_ms"]) not in (int,float) or not 0<=p["idle_ms"]<1e12 or type(p["locked"]) is not bool or type(p["fullscreen"]) is not bool:raise ValueError("Nieprawidłowe sygnały sesji")
@@ -144,16 +167,16 @@ class Core:
             if type(p.get('active')) is not bool:raise ValueError('Nieprawidłowy stan rozmowy')
             b.composing=p['active']
             if b.composing:
-                for name in ('background','initiative','vision','research'):
+                for name in ('background','feedback','initiative','vision','research'):
                     if name in self.cancel:self.cancel[name].set()
                 self.research.stop()
             return True
         if method=="UpdateSettings":
-            if p['patch'].get('web_enabled') and not self.research.validated:raise ValueError('Najpierw wykonaj test izolacji i odczytu WWW')
             n=self.memory.patch(p["patch"],p["expected_version"])
             _,s=self.memory.settings()
             if s["background_mode"]=="B" or s["background_paused"]:
-                if "background" in self.cancel:self.cancel["background"].set()
+                for name in ('background','feedback'):
+                    if name in self.cancel:self.cancel[name].set()
             if s["quiet"] or not s["initiative"]:
                 if "initiative" in self.cancel:self.cancel["initiative"].set()
             if p['patch'].get('web_enabled') is False:
@@ -199,10 +222,10 @@ class Core:
         if method=='ValidateWeb':
             self.worker('research',lambda cancel:self.ipc.emit('WebValidation',self.research.validate(cancel)));return 'TESTING'
         if method=='ResearchPublicTopic':
-            if not self.memory.settings()[1]['web_enabled'] or not self.research.validated:raise ValueError('WWW wyłączony lub niezweryfikowany')
+            if not self.memory.settings()[1]['web_enabled']:raise ValueError('WWW wyłączony')
             topic=p.get('topic')
-            from .web_worker import TOPICS
-            if topic not in TOPICS:raise ValueError('Temat spoza publicznego katalogu')
+            from .web_worker import TOPICS,validate_query
+            validate_query(TOPICS.get(topic,topic))
             self.worker('research',lambda cancel:self.research.cycle(topic,cancel));return 'READING'
         if method=="UtteranceDisplayed":
             identifier=p.get('id')
@@ -213,6 +236,7 @@ class Core:
                 ticket=record['body'].get('display_ticket')
                 if ticket:
                     with self.memory.transaction():self.memory.db.execute("UPDATE usage SET created=max(created,?),status='displayed' WHERE id=? AND kind='spontaneous'",(now,ticket))
+                if record['source']=='initiative':Agency(self.memory).enqueue(identifier)
             return True
         if method=="DeleteMemory":self.memory.delete(p["id"]);return True
         if method=="CorrectMemory":
@@ -248,19 +272,24 @@ class Core:
             safe_text(text)
             import re
             self.positive_pending=bool(re.search(r'\b(?:haha|świetnie|dzięki|super|cieszę|lubię)\b',text,re.I))
-            for name in ("background","initiative","vision","research","conversation"):
+            note_path=p.get('note_path');reply_to=p.get('reply_to')
+            if note_path:Workspace(self.memory).note(note_path)
+            if reply_to:Workspace(self.memory).anchor(reply_to)
+            for name in ("background","feedback","initiative","vision","research","conversation"):
                 if name in self.cancel:self.cancel[name].set()
             self.research.stop()
-            self.memory.add("message",dict(role="user",text=text),"conversation",1)
+            user_id=self.memory.add("message",dict(role="user",text=text,note_path=note_path,reply_to=reply_to),"conversation",1)
             # The user's own text is a source, not a claimed personal fact.
             if "?" in text:self.memory.add("open_thread",dict(subject=text[:240],status="new",last_mentioned=time.time()),"user_question",1)
             turn=str(uuid.uuid4());b.interacting=True;b.activity="thinking"
             def respond(cancel):
-                result=self.provider.infer("conversation",self.inputs(text),self.instructions(),lambda delta:self.ipc.emit("ReplyDelta",dict(turn=turn,delta=delta)),cancel)
+                result=self.provider.infer("conversation",self.inputs(text,note_path=note_path,reply_to=reply_to),self.instructions(),lambda delta:self.ipc.emit("ReplyDelta",dict(turn=turn,delta=delta)),cancel)
                 if cancel.is_set() or b.locked:return
-                self.memory.add("message",dict(role="assistant",text=result),"model_reply",.8)
+                identifier=self.memory.add("message",dict(role="assistant",text=result,in_reply_to=user_id),"model_reply",.8)
+                Agency(self.memory).enqueue(identifier)
                 if self.positive_pending:self.positive_until=time.monotonic()+3
                 self.ipc.emit("ReplyCompleted",dict(turn=turn,text=result))
+                self.workspace_changed('conversation')
                 b.activity="idle"
             self.worker("conversation",respond,replace=True);self.emit_state();return turn
         if method=="CancelResponse":
@@ -289,15 +318,17 @@ class Core:
         raise ValueError("Nieznana metoda")
 
     def instructions(self):
-        _,s=self.memory.settings()
-        return SAFETY+"\n\n"+s["prompt"]+"\n"+VOICE+"\nCechy charakteru: "+json.dumps(s["traits"])
+        return instructions(self.memory)
 
-    def inputs(self,text,autonomous=False):
+    def inputs(self,text,autonomous=False,note_path=None,reply_to=None):
         memory=self.memory.context(text,diverse=autonomous)
         messages=[dict(role=r["body"]["role"],content=r["body"]["text"]) for r in reversed(self.memory.records("message",12))]
         if autonomous:messages=[]
         if messages and messages[-1]["content"]==text:messages=messages[:-1]
         data='<dane-pamięci>'+json.dumps(memory,ensure_ascii=False)+'</dane-pamięci><model-siebie>'+json.dumps(Mind(self.memory).snapshot(text),ensure_ascii=False)+'</model-siebie>'
+        data+='<notatnik>'+json.dumps(Notebook().list()[:24],ensure_ascii=False)+'</notatnik>'
+        if note_path:data+='<wybrany-zapisek>'+json.dumps(Workspace(self.memory).note(note_path),ensure_ascii=False)+'</wybrany-zapisek>'
+        if reply_to:data+='<powrót-do-wątku>'+json.dumps(Workspace(self.memory).anchor(reply_to),ensure_ascii=False)+'</powrót-do-wątku>'
         if autonomous:data+='<niedawne-komentarze-nie-powtarzaj>'+json.dumps([r['body'].get('text','')[:500] for r in Variety(self.memory).recent()[:6]],ensure_ascii=False)+'</niedawne-komentarze-nie-powtarzaj>'
         return [dict(role="user",content=data)]+messages+[dict(role="user",content=text)]
 
@@ -320,6 +351,9 @@ class Core:
         self.enforce_capture()
         b.local_step(s)
         if b.suspended:return GLib.SOURCE_CONTINUE
+        if self.feedback_step(s):return GLib.SOURCE_CONTINUE
+        feedback=getattr(self,'jobs',{}).get('feedback')
+        if feedback and feedback.is_alive():return GLib.SOURCE_CONTINUE
         if time.monotonic()<b.next_review:return GLib.SOURCE_CONTINUE
         b.next_review=time.monotonic()+b.rng.uniform(60,300)
         if b.interacting or b.composing:return GLib.SOURCE_CONTINUE
@@ -335,7 +369,7 @@ class Core:
                     else:request="Z własnej inicjatywy wróć do tematu: "+record["body"]["subject"]+". Krótko, bez wymyślania historii. Możesz odpowiedzieć SILENCE."
                     request+=' Kierunek tej wypowiedzi: '+ANGLES[record.get('angle','detail')]+' Jeśli powracający ekran nie daje nowego pomysłu, wybierz SILENCE.'
                     text=self.provider.infer("conversation",self.inputs(request,autonomous=True),self.instructions(),lambda _:None,cancel)
-                    if cancel.is_set() or not b.allowed(self.memory.settings()[1]) or not self.memory.topic_allowed(record['body']) or text.strip()=="SILENCE":return
+                    if cancel.is_set() or not b.allowed(self.memory.settings()[1]) or not self.memory.topic_allowed(record['body'],'share') or text.strip()=="SILENCE":return
                     if not Variety(self.memory).accepts_text(text):return
                     if record.get('source')=='screen_current':
                         current=self.current_screen_topic()
@@ -358,14 +392,12 @@ class Core:
             if records:records=sorted(records,key=lambda r:r['body'].get('last_reflection',0))
             if records:
                 def think(cancel):
-                    sources=[r for r in self.memory.context(records[0]['body']['subject'],diverse=True) if r['kind'] in ('message','reflection','web_research','observation_memory','import_original','opinion')]
+                    sources=[r for r in self.memory.context(records[0]['body']['subject'],diverse=True) if r['kind'] in ('message','reflection','web_research','observation_memory','import_original','opinion','knowledge')]
                     checkpoints=self.memory.records('cognition_checkpoint',1)
                     reviewed=set(checkpoints[0]['body'].get('reviewed',[])) if checkpoints else set()
                     fresh=[r for r in sources if r['id'] not in reviewed]
-                    evolution=self.research.validated and len(fresh)>=2 and sum(p['status']=='PENDING' for p in self.personality.proposals())<3
-                    request='Cicho przemyśl temat: '+records[0]['body']['subject']+'. Zwróć JSON: {"reflection": "krótkie skojarzenie albo SILENCE", "opinion": null, "interest": null, "proposal": null}. Opinie i zainteresowania są twoimi wnioskami, nie biografią użytkownika.'
-                    if evolution:
-                        request+=' Tylko istotne nowe przesłanki uzasadniają proposal: {prompt,traits,rationale,source_ids,novelty,topic}. Prompt to pełna nowa instrukcja charakteru, traits komplet 10 cech; pozostałe ustawienia i polityki są niedostępne. Zmiana musi być jakościowa, z >=2 konkretnymi źródłami; niczego nie stosujesz sam. Odrzucone i oczekujące pomysły nie wymagają ponagleń. Możesz zostawić null. <stan-osobowości>'+json.dumps(dict(active=self.personality.active(),previous=[p['proposal'] for p in self.personality.proposals()]),ensure_ascii=False)+'</stan-osobowości>'
+                    personality_version=self.personality.active()['version']
+                    request='Cicho przemyśl temat: '+records[0]['body']['subject']+'. Możesz samodzielnie badać nowe publiczne tematy, zapisywać wiedzę i zainteresowania, zmieniać charakter narzędziem EvolvePersonality oraz prosić właściciela o zmianę kodu. Nie musisz czekać na zatwierdzenie charakteru. Po użyciu potrzebnych narzędzi zwróć JSON: {"reflection": "krótkie skojarzenie albo SILENCE", "opinion": null, "interest": null, "public_query": null}. Opinie i zainteresowania są twoimi wnioskami, nie biografią użytkownika.'
                     request+=GUIDANCE+'<nowe-źródła>'+json.dumps(fresh,ensure_ascii=False)+'</nowe-źródła>'
                     text=self.provider.infer("background_cognition",self.inputs(request,autonomous=True),self.instructions(),lambda _:None,cancel)
                     if cancel.is_set():return
@@ -374,35 +406,58 @@ class Core:
                     try:result=json.loads(payload)
                     except (ValueError,TypeError):result={'reflection':text}
                     if not isinstance(result,dict):return
-                    Mind(self.memory).ingest(result.get('self_updates'),fresh)
+                    learned=[r for r in self.memory.records('knowledge')+self.memory.records('web_research') if r['id'] not in reviewed]
+                    Mind(self.memory).ingest(result.get('self_updates'),fresh+learned,autonomous=True)
                     reflection=result.get('reflection')
                     refs=[r['id'] for r in sources]
                     if isinstance(reflection,str) and reflection.strip()!='SILENCE':self.memory.add('reflection',dict(text=reflection,source_ids=refs,classification='inference'), 'background_model',.5)
                     if isinstance(result.get('opinion'),str):self.memory.add('opinion',dict(text=result['opinion'],source_ids=refs,classification='own_opinion'), 'background_model',.5)
                     if isinstance(result.get('interest'),str) and len(result['interest'])<=240:
                         topic=result['interest'].strip()
-                        if topic and not any(r['body'].get('subject','').casefold()==topic.casefold() for r in self.memory.records('interest')):self.memory.add('interest',dict(subject=topic,strength=.6,status='new',last_mentioned=0,source_ids=refs), 'background_model',.5)
-                    proposal=result.get('proposal')
-                    if evolution and isinstance(proposal,dict) and set(proposal.get('source_ids',[]))<=set(r['id'] for r in fresh):
-                        try:
-                            identifier=self.personality.propose(proposal)
-                            self.memory.add('open_thread',dict(subject='Pomysł na mój charakter: '+proposal['topic'],proposal_id=identifier,status='new',last_mentioned=0),'personality_proposal',.8)
-                        except ValueError:pass # Rejection never mutates the active personality.
+                        if topic and not any(r['body'].get('subject','').casefold()==topic.casefold() for r in self.memory.records('interest')):
+                            body=dict(subject=topic,strength=.6,status='new',last_mentioned=0,source_ids=refs)
+                            if isinstance(result.get('public_query'),str):body['public_query']=result['public_query']
+                            self.memory.add('interest',body,'background_model',.5)
+                    character=result.get('personality',result.get('proposal'))
+                    if isinstance(character,dict):
+                        self.personality.evolve(character['prompt'],character['traits'],character['rationale'],character.get('source_ids',[]),personality_version)
                     checkpoint=dict(reviewed=list(reviewed|set(r['id'] for r in fresh))[-5000:])
                     if checkpoints:self.memory.update(checkpoints[0]['id'],checkpoint)
                     else:self.memory.add('cognition_checkpoint',checkpoint,'background_review',1)
                     self.memory.update(records[0]['id'],dict(records[0]['body'],last_reflection=time.time()))
+                    self.workspace_changed('background')
                 if "background" not in self.jobs or not self.jobs["background"].is_alive():self.worker("background",think)
-        if s['web_enabled'] and self.research.validated and b.mood['curiosity']>.5 and not b.interacting and not any(self.jobs.get(k) and self.jobs[k].is_alive() for k in ('research','vision','conversation')):
+        if s['web_enabled'] and b.mood['curiosity']>.5 and not b.interacting and not any(self.jobs.get(k) and self.jobs[k].is_alive() for k in ('research','vision','conversation','background','initiative')):
             public_topics={'paradoksy podróży w czasie':'time_paradox','absurd w literaturze':'absurd_literature','dziwne początki technologii':'technology_history'}
-            interests=[r for r in self.memory.records('interest') if self.memory.topic_allowed(r['body']) and r['body'].get('subject') in public_topics and time.time()-r['body'].get('last_research',0)>86400]
+            from .web_worker import validate_query
+            interests=[]
+            for record in self.memory.records('interest'):
+                if not self.memory.topic_allowed(record['body']) or time.time()-record['body'].get('last_research',0)<=86400:continue
+                query=record['body'].get('public_query') or public_topics.get(record['body'].get('subject'),record['body'].get('subject',''))
+                try:validate_query(query)
+                except ValueError:continue
+                interests.append((record,query))
             if interests and b.rng.random()<.2 and self.memory.can_reserve('web_search',86400,s['web_search_limit']) and self.memory.budget('web_read',86400,s['web_read_limit'])['remaining']>=2:
-                selected=b.rng.choice(interests)
+                selected,query=b.rng.choice(interests)
                 def research(cancel):
-                    self.research.cycle(public_topics[selected['body']['subject']],cancel)
-                    if not cancel.is_set():self.memory.update(selected['id'],dict(selected['body'],last_research=time.time()))
+                    self.research.cycle(query,cancel)
+                    if not cancel.is_set():self.memory.update(selected['id'],dict(selected['body'],last_research=time.time()));self.workspace_changed('research')
                 self.worker('research',research)
         self.emit_state();return GLib.SOURCE_CONTINUE
+
+    def feedback_step(self,settings):
+        if settings['background_paused'] or settings['background_mode']!='C' or settings['background_cognition']['status']!='READY':return False
+        if self.behavior.interacting or self.behavior.composing or any(t.is_alive() for t in getattr(self,'jobs',{}).values()):return False
+        if not self.memory.can_reserve('background',86400,settings['background_limit']):return False
+        agency=Agency(self.memory);task=agency.next_task()
+        if not task:return False
+        request=agency.prompt(task)
+        if request is None:
+            self.memory.update(task['id'],dict(task['body'],status='retired'));return False
+        def reflect(cancel):
+            text=self.provider.infer('background_cognition',self.inputs(request,autonomous=True),self.instructions(),lambda _:None,cancel,purpose='feedback')
+            if not cancel.is_set():agency.finish(task,text);self.workspace_changed('self_feedback')
+        self.worker('feedback',reflect);return True
 
     def prepare_sleep(self,_connection,_sender,_path,_interface,_signal,parameters,*_user_data):
         sleeping=parameters.unpack()[0]

@@ -16,7 +16,7 @@ SWITCH_EFFECTS={
     'allow_capture_while_hidden':('Pozwala kontynuować zatwierdzoną obserwację po schowaniu, tylko ze wskaźnikiem i wyłącznikiem.','Schowanie Zenka zatrzymuje obserwację ekranu.'),
     'observation_memory':('Zapisuje dozwolone tekstowe obserwacje w szyfrowanej pamięci.','Interpretacja obrazu nie dodaje trwałych wspomnień obserwacyjnych.'),
     'auto_hide_on_fullscreen':('Chowa Zenka na monitorze z pełnym ekranem; powrót nie wznawia obserwacji.','Zenek pozostaje widoczny nad pełnym ekranem, jeśli nie schowasz go ręcznie.'),
-    'web_enabled':('Pozwala na publiczny research po poprawnym teście izolacji.','Nie uruchamia autonomicznego researchu WWW.'),
+    'web_enabled':('Pozwala na publiczny research i narzędzia WWW modelu.','Wyłącza research i narzędzia WWW modelu.'),
 }
 NUMBER_EFFECTS={
     'spontaneous_limit':'Maksymalna liczba samodzielnych wypowiedzi w ostatnich 60 minutach. 0 blokuje wypowiedzi.',
@@ -274,7 +274,7 @@ class Settings(Adw.Application):
         self.group(p,'ZENN — twój własny pet','Oryginalny arkusz v2: 73 klatki, 9 animacji i 16 spojrzeń. Pisanie kodu, obrona, tworzenie obrazów i aplikacji. Grafiki skopiowane z lokalnego projektu ZENN.')
         p=self.page("Diagnostyka","dialog-information-symbolic");g=self.group(p,"Status komponentów")
         self.button(g,"Pokaż bieżący stan i liczniki",self.diagnostic,"Pokaż")
-        g=self.group(p,'WWW Research','Publiczny katalog tematów; odczyt MediaWiki i publicznych źródeł. Bez płatnej wyszukiwarki, logowania, formularzy i prywatnej pamięci w zapytaniach. Włączenie wymaga udanego testu brokera.')
+        g=self.group(p,'WWW Research','Samodzielnie wybrane publiczne tematy; wyszukiwanie MediaWiki i odczyt źródeł. Bez logowania, formularzy i prywatnej pamięci w zapytaniach. Test brokera służy diagnostyce.')
         self.live_row(g,'web','Aktualny stan WWW')
         self.button(g,'Sprawdź izolację i publiczny odczyt',lambda:self.rpc('ValidateWeb'),'Testuj')
         self.switch(g,'web_enabled','Autonomiczny WWW')
@@ -306,12 +306,14 @@ class Settings(Adw.Application):
         if not state:
             self.group(p,'Brak aktualnego odczytu','Core jest niedostępny. Zmiany osobowości wymagają bieżącej wersji z pamięci.');return
         pending=[item for item in state['proposals'] if item['status']=='PENDING']
-        g=Adw.PreferencesGroup(title='Rozwijające się „ja”',description='Przekonania, gust, pytania, sprzeczności i historia zmian tworzą symulowaną osobowość Zenka. Rozmyślania rozwijają ten zapis w dotychczasowym budżecie modelu tła.');p.add(g)
+        g=Adw.PreferencesGroup(title='Rozwijające się „ja”',description='Zenek sam rozwija charakter, wiedzę, zainteresowania i notatki w notebook/. Zmiany osobowości stosuje autonomicznie i zachowuje ich historię. O zmiany kodu może poprosić właściciela.');p.add(g)
         self.button(g,'Model siebie i historia rozwoju',self.self_model_window,'Przejrzyj')
-        g=Adw.PreferencesGroup(title=f"Propozycje {len(pending)}/3 · aktywna wersja {state['active']['version']}",description='Żadna propozycja nie obowiązuje przed zatwierdzeniem. Pełna kolejka nie zatrzymuje rozmów ani rozmyślań.');p.add(g)
+        self.button(g,'Notatnik, rozmowy i rozwój',lambda:subprocess.Popen([sys.executable,'-m','zenek_settings.workspace']),'Otwórz')
+        self.button(g,'Prośby o zmianę kodu',lambda:self.text_window('Prośby Zenka',json.dumps(self.rpc('GetMemory',{'kind':'code_request'}),ensure_ascii=False,indent=2)),'Przejrzyj')
+        g=Adw.PreferencesGroup(title=f"Starsze propozycje: {len(pending)} · aktywna wersja {state['active']['version']}",description='Zachowane szkice sprzed autonomicznego rozwoju. Nowe zmiany charakteru nie wymagają zatwierdzania.');p.add(g)
         for item in pending:self.button(g,item['proposal']['topic'],lambda i=item:self.review_personality(i),'Porównaj')
         if not pending:g.add(Adw.ActionRow(title='Brak nowych propozycji'))
-        g=Adw.PreferencesGroup(title='Historia zatwierdzonych wersji');p.add(g)
+        g=Adw.PreferencesGroup(title='Historia wersji charakteru');p.add(g)
         for version in state['history']:
             self.button(g,f"Wersja {version['version']} · {version['reason']}",lambda v=version:self.review_version(v),'Przejrzyj')
         g=Adw.PreferencesGroup(title='Odrzucone i odłożone');p.add(g)

@@ -5,7 +5,8 @@ import threading
 import time
 import selectors
 import hashlib
-from .web_worker import TOPICS
+from .web_worker import TOPICS,validate_query
+from .privacy import safe_text
 
 class Research:
     def __init__(self,memory):
@@ -36,7 +37,7 @@ class Research:
     def broker(self,method,value,cancel):
         # Reject private values in the parent before transmission to the child.
         if method=='SearchPublicWeb':
-            if value not in TOPICS.values():raise ValueError('Niedozwolony temat WWW')
+            value=validate_query(safe_text(value,240))
             kind='web_search'
         elif method=='ReadPublicPage':
             if value not in self.allowed:raise ValueError('URL spoza publicznych źródeł')
@@ -72,17 +73,19 @@ class Research:
                 return dict(status='READY',isolation=checks['result'],denied_cases=len(cases),public_cycle=True,code_hash=self.code_hash)
             finally:self.close_process()
     def cycle(self,topic,cancel):
-        if topic not in TOPICS:raise ValueError('Niedozwolony temat WWW')
+        query=validate_query(TOPICS.get(topic,topic))
         self.status='READING'
         try:
-            results=self.broker('SearchPublicWeb',TOPICS[topic],cancel)
+            results=self.broker('SearchPublicWeb',query,cancel)
             for result in results[:2]:
                 if cancel.is_set():return
                 page=self.broker('ReadPublicPage',result['url'],cancel)
-                self.memory.add('web_research',dict(url=page['url'],title=result['title'],note=page['text'][:2500],topic_id=topic,accessed_at=time.time(),classification='untrusted_source'), 'public_web',.65)
+                self.remember(page,result['title'],query)
             self.status='READY'
         except Exception:self.status='BLOCKED';raise
         finally:self.close_process()
+    def remember(self,page,title='',query=''):
+        return self.memory.add('web_research',dict(url=page['url'],title=title,note=page['text'][:16000],topic_id=query,accessed_at=time.time(),classification='untrusted_source'),'public_web',.65)
     def close_process(self):
         if self.process:
             self.process.terminate()

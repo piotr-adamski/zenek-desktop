@@ -94,10 +94,10 @@ def test_old_model_request_does_not_change_new_profile_status(tmp_path,monkeypat
     def handler(request):
         m.patch({'conversation':dict(model_id='new-model',reasoning_effort='high',status='UNAVAILABLE')},m.settings()[0])
         if not success:m.profile_status('conversation','READY')
-        return httpx.Response(200 if success else 503,text='data: {"type":"response.completed"}\n\n')
+        return httpx.Response(200 if success else 503,text='data: {"type":"response.output_text.delta","delta":"Synthetic"}\n\ndata: {"type":"response.completed"}\n\n')
     original=httpx.AsyncClient
     monkeypatch.setattr(httpx,'AsyncClient',lambda **kwargs:original(transport=httpx.MockTransport(handler),**kwargs))
-    if success:assert p.infer('conversation',[],'Synthetic',lambda _:None,threading.Event())==''
+    if success:assert p.infer('conversation',[],'Synthetic',lambda _:None,threading.Event())=='Synthetic'
     else:
         with pytest.raises(ProviderBlocked,match='HTTP'):p.infer('conversation',[],'Synthetic',lambda _:None,threading.Event())
     profile=m.settings()[1]['conversation']

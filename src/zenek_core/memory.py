@@ -223,8 +223,10 @@ class Memory:
             subject=' '.join(body['subject'].casefold().split())
             with self.transaction():self.db.execute('INSERT OR IGNORE INTO topic_suppressions VALUES(?,?)',(subject,time.time()))
 
-    def topic_allowed(self,body):
+    def topic_allowed(self,body,audience='think'):
         if body.get('do_not_mention') or body.get('status') in ('dismissed','expired'):return False
+        from .agency import Agency
+        if not Agency(self).allows(body,audience):return False
         subject=' '.join(body.get('subject','').casefold().split())
         with self.lock:
             if body.get('proposal_id'):
@@ -315,10 +317,10 @@ class Memory:
     def close(self):
         with self.lock:self.db.close()
 
-    def personality_snapshot(self,settings,reason,proposal=None):
+    def personality_snapshot(self,settings,reason,proposal=None,actor='local_owner'):
         old=self.db.execute('SELECT version FROM personality_active WHERE id=1').fetchone()
         cursor=self.db.execute('INSERT INTO personality_versions(prompt,traits,created,previous,proposal,actor,reason) VALUES(?,?,?,?,?,?,?)',
-            (settings['prompt'],json.dumps(settings['traits']),time.time(),old[0] if old else None,proposal,'local_owner',reason))
+            (settings['prompt'],json.dumps(settings['traits']),time.time(),old[0] if old else None,proposal,actor,reason))
         version=cursor.lastrowid
         self.db.execute('INSERT INTO personality_active VALUES(1,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version',(version,))
         return version

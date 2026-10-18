@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zenek-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "A local GNOME desktop companion with encrypted memory and a simulated personality"
 readme = "README.md"
 license = "Apache-2.0"

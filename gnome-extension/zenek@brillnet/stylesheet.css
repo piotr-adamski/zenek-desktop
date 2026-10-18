@@ -5,3 +5,4 @@
 .zenek-button { padding: 6px 10px; background-color: #34556a; border-radius: 7px; }
 .zenek-button:hover { background-color: #427c82; }
 .zenek-tooltip { background-color: #192636; color: #f1f0df; border: 1px solid #69cbb8; border-radius: 8px; padding: 8px 12px; font-size: 13px; width: 230px; }
+.zenek-operation { color: #b6bdd0; font-size: 10pt; padding-top: 6px; }

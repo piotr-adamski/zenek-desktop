@@ -1,7 +1,9 @@
 # Contributing to Zenek
 
 Read the [architecture](docs/architecture.md), [privacy model](docs/privacy.md)
-and [testing scope](docs/testing.md) before changing behavior. Keep public
+and [testing scope](docs/testing.md) before changing behavior. The current preview
+is 0.2.0; [autonomy.md](docs/autonomy.md) documents its tools and character/agenda
+boundaries. Keep public
 documentation and issue reports in English; the current product UI and default
 persona are Polish. Small, focused pull requests are welcome.
 
@@ -43,3 +45,8 @@ git commit -s
 Never sign on behalf of another contributor. Keep CI and installation changes
 explicit in the PR. CI runs on untrusted fork code with read-only permissions
 and no account credentials; maintainer review remains necessary.
+
+For changes to tools/agency, reproduce the behavior with isolated synthetic
+memory and notebook data. Cover the affected boundary or state transition,
+including budgets/cancellation when relevant. Do not use the owner's actual
+notes as test fixtures. Maintainer publication follows [releasing.md](docs/releasing.md).

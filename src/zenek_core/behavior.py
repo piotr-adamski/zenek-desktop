@@ -29,7 +29,7 @@ class Behavior:
         if not self.allowed(s): return None
         candidates=self.memory.records("open_thread")+self.memory.records("interest")+Mind(self.memory).candidates()
         variety=Variety(self.memory)
-        candidates=[r for r in candidates if self.memory.topic_allowed(r['body']) and now-r["body"].get("last_mentioned",0)>7200]
+        candidates=[r for r in candidates if self.memory.topic_allowed(r['body'],'share') and now>=r['body'].get('not_before',0) and now-r["body"].get("last_mentioned",0)>7200]
         candidates=[r for r in candidates if variety.allows(r,now)]
         candidates=[r for r in candidates if not r['body'].get('proposal_id') or not r['body'].get('last_mentioned',0)]
         priority=s.get('screen_comment_priority','off')

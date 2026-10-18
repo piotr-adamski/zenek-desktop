@@ -13,6 +13,25 @@ def prompt_diff(before,after):
 
 class Personality:
     def __init__(self,memory):self.memory=memory
+    def evolve(self,prompt,traits,rationale,source_ids,expected_version):
+        """Owner-authorized autonomous character change; no code/config access."""
+        safe_text(prompt);safe_text(rationale)
+        if not prompt.strip() or not rationale.strip():raise ValueError('Podaj charakter i powód zmiany')
+        if FORBIDDEN.search(prompt):raise ValueError('Zmiany polityki lub uprawnień są niedozwolone')
+        if not isinstance(traits,dict) or set(traits)!=set(TRAITS) or any(type(v) not in (int,float) or not 0<=v<=1 for v in traits.values()):raise ValueError('Nieprawidłowe trwałe cechy')
+        if not isinstance(source_ids,list) or any(not isinstance(ref,str) for ref in source_ids):raise ValueError('Nieprawidłowe źródła')
+        with self.memory.transaction():
+            active=self.active()
+            if active['version']!=expected_version:raise ValueError('Osobowość zmieniła się w trakcie rozmyślania; odczytaj aktualną wersję')
+            for ref in source_ids:
+                if self.memory.record(ref)['kind'] in INTERNAL_RECORD_KINDS:raise ValueError('Konfiguracja nie jest źródłem charakteru')
+            if prompt==active['prompt'] and traits==active['traits']:return active
+            version,settings=self.memory.settings();settings.update(prompt=prompt,traits=traits)
+            self.memory.db.execute('UPDATE settings SET version=?,body=? WHERE id=1',(version+1,json.dumps(settings)))
+            new_version=self.memory.personality_snapshot(settings,'autonomous',actor='zenek')
+            body=dict(before_version=active['version'],version=new_version,rationale=rationale,source_ids=source_ids,classification='autonomous_character_change')
+            self.memory.db.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?)',(str(uuid.uuid4()),'personality_evolution',json.dumps(body,ensure_ascii=False),'zenek',1,time.time(),time.time()))
+        return self.active()
     def active(self):
         with self.memory.lock:
             row=self.memory.db.execute('SELECT v.version,v.prompt,v.traits FROM personality_versions v JOIN personality_active a ON a.version=v.version WHERE a.id=1').fetchone()

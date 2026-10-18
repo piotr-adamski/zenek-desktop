@@ -228,7 +228,7 @@ def child():
                         assert not any(isinstance(v,Adw.ActionRow) and any((v.get_title() or '').startswith(kind+' ·') for kind in INTERNAL_RECORD_KINDS) for v in walk(memory_panel))
                         memory_panel.close()
                         pending=window('Osobowość Zenka')
-                        assert any(isinstance(v,Adw.PreferencesGroup) and 'Propozycje 3/3' in (v.get_title() or '') for v in walk(pending))
+                        assert any(isinstance(v,Adw.PreferencesGroup) and 'Starsze propozycje: 3' in (v.get_title() or '') for v in walk(pending))
                         row=next(v for v in walk(pending) if isinstance(v,Adw.ActionRow) and v.get_title()=='Syntetyczna propozycja 1')
                         row.get_activatable_widget().emit('clicked');self.phase=2
                     elif self.phase==2:
@@ -248,7 +248,7 @@ def child():
                         assert self.prompt.get_buffer().get_text(*self.prompt.get_buffer().get_bounds(),True)==state['active']['prompt']
                         assert self.traits['humor'].get_value()==.4
                         pending=window('Osobowość Zenka')
-                        assert any(isinstance(v,Adw.PreferencesGroup) and 'Propozycje 2/3' in (v.get_title() or '') for v in walk(pending)),'Open panel still shows obsolete queue count'
+                        assert any(isinstance(v,Adw.PreferencesGroup) and 'Starsze propozycje: 2' in (v.get_title() or '') for v in walk(pending)),'Open panel still shows obsolete queue count'
                         self.review_personality(find_proposal(state,candidates[1]));self.phase=4
                     elif self.phase==4:
                         review=window('Propozycja: Syntetyczna propozycja 2');assert 'po porównaniu' in button(review,'Zatwierdź po porównaniu z obecną wersją').get_label()

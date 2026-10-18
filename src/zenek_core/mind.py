@@ -10,7 +10,7 @@ CATEGORIES={
     'questions':'Otwarte pytania', 'taste':'Gust i estetyka', 'aspirations':'Dążenia',
     'tensions':'Sprzeczności', 'relationship':'Relacja', 'metacognition':'Myślenie o sobie',
 }
-GUIDANCE='''Dodatkowo możesz zwrócić self_updates: maksymalnie 3 wpisy {category, domain, text, confidence, reason, source_ids, related_ids}. Kategorie: identity, values, beliefs, questions, taste, aspirations, tensions, relationship, metacognition. domain to krótka stabilna nazwa obszaru (np. ciągłość, humor, niepewność); ponowny wpis tej samej kategorii i obszaru rozwija poprzedni. text opisuje twoje stanowisko, otwarte pytanie, gust lub konflikt; reason wyjaśnia konkretną zmianę. source_ids wyłącznie z nowych źródeł poniżej, related_ids mogą łączyć istniejące aspekty modelu siebie. To symulacja osobowości dla zabawy: możesz rozbudowywać perspektywę i kwestionować własne przekonania. Nie wymyślaj wspólnej historii, przeżyć ani cech Piotra. Nie zmieniasz instrukcji, limitów lub uprawnień. Powtarzający się ekran nie jest nowym argumentem. Gdy nie ma nowej myśli, zwróć pustą listę. Nie buduj wszystkich obszarów wokół tego samego tematu.'''
+GUIDANCE='''Dodatkowo możesz zwrócić self_updates: wpisy {category, domain, text, confidence, reason, source_ids, related_ids}. Kategorie: identity, values, beliefs, questions, taste, aspirations, tensions, relationship, metacognition. domain to krótka stabilna nazwa obszaru (np. ciągłość, humor, niepewność); ponowny wpis tej samej kategorii i obszaru rozwija poprzedni. text opisuje twoje stanowisko, otwarte pytanie, gust lub konflikt; reason wyjaśnia zmianę. source_ids wskazują źródła z kontekstu lub wyniku narzędzi; pusta lista oznacza własny pomysł bez zewnętrznego potwierdzenia. related_ids mogą łączyć istniejące aspekty modelu siebie. To symulacja osobowości dla zabawy: możesz rozbudowywać perspektywę i kwestionować własne przekonania. Nie wymyślaj wspólnej historii, przeżyć ani cech Piotra. Charakter zmieniasz autonomicznie narzędziem EvolvePersonality; nie zmieniasz limitów lub uprawnień. Powtarzający się ekran nie jest nowym argumentem. Gdy nie ma nowej myśli, zwróć pustą listę. Nie buduj wszystkich obszarów wokół tego samego tematu.'''
 
 class Mind:
     def __init__(self,memory):self.memory=memory
@@ -43,20 +43,21 @@ class Mind:
         return dict(mode='fictional_self_model',categories=CATEGORIES,facet_count=len(rows),revision_count=revisions,facets=selected[:limit])
     def candidates(self):
         return [dict(r,body=dict(r['body'],subject=CATEGORIES.get(r['body'].get('category'),'Myśl')+': '+r['body']['text'])) for r in self.facets() if r['body'].get('text')]
-    def ingest(self,updates,fresh_sources):
+    def ingest(self,updates,fresh_sources,autonomous=False):
         if not isinstance(updates,list):return 0
         # An earlier generated self-description must not become its own evidence.
-        allowed={r['id'] for r in fresh_sources if r['kind'] in ('message','web_research','observation_memory','import_original','reflection','opinion') and (r['kind']!='message' or r['body'].get('role')=='user')}
-        if not allowed:return 0
+        allowed={r['id'] for r in fresh_sources if r['kind'] in ('message','web_research','observation_memory','import_original','reflection','opinion','knowledge') and (r['kind']!='message' or r['body'].get('role')=='user')}
+        if not allowed and not autonomous:return 0
         changed=0
-        for value in updates[:3]:
+        for value in (updates if autonomous else updates[:3]):
             if not isinstance(value,dict) or set(value)-{'category','domain','text','confidence','reason','source_ids','related_ids'}:continue
             category=value.get('category');domain=value.get('domain');text=value.get('text');reason=value.get('reason');confidence=value.get('confidence',.5)
             refs=value.get('source_ids');links=value.get('related_ids',[])
             if not isinstance(category,str) or category not in CATEGORIES or not isinstance(domain,str) or not 2<=len(domain.strip())<=80:continue
-            if not isinstance(text,str) or not 15<=len(text.strip())<=1800 or not isinstance(reason,str) or not 15<=len(reason)<=600:continue
+            minimum=1 if autonomous else 15
+            if not isinstance(text,str) or not minimum<=len(text.strip())<=1800 or not isinstance(reason,str) or not minimum<=len(reason)<=600:continue
             if type(confidence) not in (float,int) or not 0<=confidence<=1:continue
-            if not isinstance(refs,list) or not refs or len(refs)>12 or any(not isinstance(r,str) or r not in allowed for r in refs):continue
+            if not isinstance(refs,list) or not refs and not autonomous or len(refs)>12 or any(not isinstance(r,str) or r not in allowed for r in refs):continue
             if not isinstance(links,list) or len(links)>8 or any(not isinstance(r,str) for r in links):continue
             safe_text(json.dumps(value,ensure_ascii=False),8000)
             domain=domain.strip().casefold();text=text.strip()
@@ -66,8 +67,8 @@ class Mind:
                 if set(links)-ids:continue
                 old=next((r for r in rows if r['body']['category']==category and r['body']['domain']==domain),None)
                 if old and old['body'].get('corrected_by')=='local_owner':continue
-                if old and (set(refs)<=set(old['body'].get('source_ids',[])) or overlap(terms(text),terms(old['body']['text']))>.9):continue
-                if not old and (len(rows)>=120 or sum(r['body']['category']==category for r in rows)>=16):continue
+                if old and (text==old['body']['text'] or not autonomous and (set(refs)<=set(old['body'].get('source_ids',[])) or overlap(terms(text),terms(old['body']['text']))>.9)):continue
+                if not old and not autonomous and (len(rows)>=120 or sum(r['body']['category']==category for r in rows)>=16):continue
                 now=time.time();identifier=old['id'] if old else str(uuid.uuid4())
                 body=dict(category=category,domain=domain,text=text,confidence=confidence,reason=reason,source_ids=list(dict.fromkeys((old['body'].get('source_ids',[]) if old else [])+refs))[-40:],related_ids=links,revision=(old['body'].get('revision',1) if old else 0)+1,classification='simulated_self',last_mentioned=old['body'].get('last_mentioned',0) if old else 0)
                 if old:self.memory.db.execute('UPDATE records SET body=?,confidence=?,updated=? WHERE id=?',(json.dumps(body,ensure_ascii=False),confidence,now,identifier))

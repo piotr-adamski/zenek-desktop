@@ -12,7 +12,7 @@ export async function run() {
     if(!ext?.stateObj)throw new Error(`Extension unavailable: ${ext?.state}, ${ext?.errors}`);
     const zenek=ext.stateObj._companion;
     if(!zenek)throw new Error('Companion loader did not complete');
-    const s={version:'0.1.0',visibility:'VISIBLE',activity:'idle',idle:false,config_version:1,
+    const s={version:'0.2.0',visibility:'VISIBLE',activity:'idle',idle:false,config_version:1,
         settings:{monitor:0,x:1030,y:510,auto_hide_on_fullscreen:true,bubble_seconds:60}};
     zenek._call=(method,_payload,cb)=>cb?.(method==='SendText'?'synthetic-turn':[]); // Synthetic IPC boundary for render-only smoke.
     zenek._apply(s);zenek._animate();
