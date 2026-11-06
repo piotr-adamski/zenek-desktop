@@ -43,13 +43,15 @@ def test_private_hobby_can_grow_without_becoming_an_invitation(memory):
     assert memory.topic_allowed(interest['body'],'share')
 
 
-def test_dislike_and_closed_topics_do_not_leak_into_initiative(memory):
+def test_dislike_and_closed_topics_do_not_leak_into_initiative(memory,monkeypatch):
+    monkeypatch.setattr(Mind,'candidates',lambda self:[])
     for record in memory.records('interest'):memory.delete(record['id'])
     agency=Agency(memory)
     for subject,interest,sharing in [('Prywatne hobby','hobby','private'),('Porzucony temat','closed','shared'),('Nielubiany temat','dislike','shared')]:
         memory.add('interest',dict(subject=subject,last_mentioned=0),'test',1)
         agency.choose(subject,interest,sharing,'Własny wybór.')
     behavior=Behavior(memory);behavior.last_ui_report=time.monotonic();behavior.idle_seconds=0
+    monkeypatch.setattr(behavior.rng,'random',lambda:0)
     assert behavior.opportunity(memory.settings()[1]) is None
     assert agency.plan('Nielubiany temat','research',0,'Nie podejmuj.')['status']=='retired'
 
